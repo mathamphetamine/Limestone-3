@@ -49,10 +49,18 @@ The `sherlocking_cards_solution.py` creates a universal map from spy values to c
 The `spy_series_solution.py` predicts the next spy value in time series:
 
 - Uses different models for each table based on autocorrelation patterns
+- Implements custom `TemporalFeaturesTransformer` to extract advanced temporal statistics
 - Detects and leverages alternating patterns in dealer data
 - Handles player data with various degrees of predictability
 - Implements data-driven handling of extreme values
-- Uses ensemble methods for high volatility tables
+- Uses ensemble methods with adaptive weighting for high volatility tables
+- Includes trend reversal detection and volatility-based prediction adjustments
+
+#### Advanced Features:
+- Adaptive alpha for exponential moving averages based on value magnitude
+- Dynamic model blending based on detected pattern changes
+- Enhanced signal processing for Table 2's high volatility data
+- Feature extraction that captures statistical, trend, and acceleration metrics
 
 #### Performance (MSE on Test Set):
 - Table 0: Player: 0.32, Dealer: 0.18
@@ -80,9 +88,19 @@ The `one_time_showdown_solution.py` develops a strategy for a single blackjack g
 The `marathon_of_twenty_one_solution.py` extends the one-time strategy for multiple games:
 
 - Implements card counting with true count adjustments
-- Manages bankroll with dynamic betting strategies
-- Adapts strategy based on win/loss history
-- Maintains state between games for improved performance
+- Manages bankroll using Kelly Criterion for optimal bet sizing
+- Uses prediction confidence to adjust strategy decisions
+- Implements adaptive strategy parameters that evolve based on game outcomes
+- Applies table-specific confidence modeling based on historical MSE
+- Incorporates dealer bust rate data from Dealer's Doom analysis
+- Tracks win/loss streaks for psychological adjustment factors
+
+#### Advanced Features:
+- Confidence-based decision framework that blends model predictions with basic strategy
+- Dynamic surrender thresholds based on bankroll and confidence levels
+- Win probability estimation using player total, dealer card, and true count
+- Conservative Kelly betting approach with confidence-adjusted fractions
+- Adaptive strategy that becomes more conservative at low bankroll levels
 
 #### Performance:
 - Table 0: Final score: -30.5
@@ -131,16 +149,20 @@ python test_marathon.py
 - Perfect alternating pattern for dealer values (strong prediction)
 - Conservative betting strategy in Marathon
 - Strong player value autocorrelation
+- Very high prediction confidence (0.9) for strategy decisions
 
 ### Table 1
 - Moderate player value autocorrelation
 - Balanced betting approach
+- Good prediction confidence (0.8) for strategy decisions
 
 ### Table 2
 - Most challenging table for player prediction (high MSE)
-- Implemented specialized extreme value handling
-- Ensemble methods to handle high volatility
+- Custom `TemporalFeaturesTransformer` with 10 engineered features
+- Ensemble methods with volatility-based weighting
+- Trend reversal detection for prediction adjustment
 - Data-driven prediction adjustment based on volatility
+- Low base prediction confidence (0.5) to limit reliance on uncertain predictions
 - Aggressive approach with higher betting unit
 - Higher dealer bust probability (28%)
 
@@ -148,12 +170,14 @@ python test_marathon.py
 - Very strong player value autocorrelation
 - Leverages card transition effects for improved prediction
 - Reasonably predictable dealer values
+- Moderate prediction confidence (0.7) for strategy decisions
 - Balanced approach to strategy
 
 ### Table 4
 - Low correlation in player values
 - Polynomial model with Ridge regularization
 - Lowest dealer bust probability (15%)
+- Good prediction confidence (0.75) despite complexity
 - Conservative approach to betting
 
 ## Solution Structure
