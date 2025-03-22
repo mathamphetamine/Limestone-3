@@ -46,7 +46,14 @@ class MyPlayer:
             # Find the data directory relative to current file
             current_dir = os.path.dirname(os.path.abspath(__file__))
             repo_root = os.path.dirname(current_dir)
-            data_path = os.path.join(repo_root, 'data', 'train.csv')
+            
+            # First check if train_split exists for better testing
+            train_split_path = os.path.join(repo_root, 'test_data', 'train_split.csv')
+            if os.path.exists(train_split_path):
+                data_path = train_split_path
+                print(f"Using train split for model training: {data_path}")
+            else:
+                data_path = os.path.join(repo_root, 'data', 'train.csv')
             
             data = pd.read_csv(data_path, header=[0,1,2])
             player_data = np.array([
@@ -223,8 +230,51 @@ class MyPlayer:
             # For table 1, integer dealer spy values map directly to cards with high accuracy
             self.dealer_model = GradientBoostingRegressor(n_estimators=100, max_depth=3)
         elif self.table_index == 2:
-            # Table 2: Complex data with range-based behaviors
-            self.player_model = RandomForestRegressor(n_estimators=100, random_state=42) 
+            # Table 2: Complex data with high variance
+            # Improved model for high MSE in Table 2
+            self.player_model = GradientBoostingRegressor(n_estimators=200, learning_rate=0.05, 
+                                                        max_depth=4, random_state=42,
+                                                        subsample=0.8, min_samples_split=5)
+            
+            # For Table 2, analyze the extreme value patterns
+            if len(self.player_spy) > 10:
+                # Calculate statistics on extreme values
+                extreme_high_values = self.player_spy[self.player_spy > 200]
+                extreme_low_values = self.player_spy[self.player_spy < -200]
+                
+                if len(extreme_high_values) > 5:
+                    # Find the average change after extreme high values
+                    extreme_high_indices = np.where(self.player_spy > 200)[0]
+                    high_next_indices = extreme_high_indices + 1
+                    high_next_indices = high_next_indices[high_next_indices < len(self.player_spy)]
+                    
+                    if len(high_next_indices) > 0:
+                        high_values = self.player_spy[extreme_high_indices[high_next_indices - extreme_high_indices == 1]]
+                        next_values = self.player_spy[high_next_indices]
+                        self.high_value_ratio = np.mean(next_values / high_values) if len(next_values) > 0 else 0.3
+                    else:
+                        self.high_value_ratio = 0.3
+                else:
+                    self.high_value_ratio = 0.3
+                    
+                if len(extreme_low_values) > 5:
+                    # Find the average change after extreme low values
+                    extreme_low_indices = np.where(self.player_spy < -200)[0]
+                    low_next_indices = extreme_low_indices + 1
+                    low_next_indices = low_next_indices[low_next_indices < len(self.player_spy)]
+                    
+                    if len(low_next_indices) > 0:
+                        low_values = self.player_spy[extreme_low_indices[low_next_indices - extreme_low_indices == 1]]
+                        next_values = self.player_spy[low_next_indices]
+                        self.low_value_ratio = np.mean(next_values / low_values) if len(next_values) > 0 else 0.4
+                    else:
+                        self.low_value_ratio = 0.4
+                else:
+                    self.low_value_ratio = 0.4
+            else:
+                self.high_value_ratio = 0.3
+                self.low_value_ratio = 0.4
+                
             self.dealer_model = make_pipeline(PolynomialFeatures(degree=2), Ridge(alpha=0.1))
         elif self.table_index == 3:
             # Table 3: High autocorrelation data
@@ -306,69 +356,105 @@ class MyPlayer:
         Predict the next player spy value based on historical data.
         
         Args:
-            hist (numpy.ndarray): Array of historical spy values (length: 5)
+            hist (list): List of past spy values
             
         Returns:
-            float: Predicted next spy value for the player
+            float: Predicted next spy value
         """
-        # Table-specific optimizations
-        if self.table_index == 1:
-            # Table 1: Use the fitted model but with some adjustments
-            model_pred = self.player_model.predict(hist.reshape(1, -1))[0]
-            
-            # Bound predictions to reasonable range based on analysis
-            # Table 1 player spy values fall between 70.55 and 89.03
-            return np.clip(model_pred, 70.5, 89.0)
-            
-        elif self.table_index == 2:
-            # Range-based prediction for Table 2
-            last_value = hist[-1]
-            
-            # Models based on the current value range
-            if 50 <= last_value < 100:
-                # This range has the lowest MSE (326.9556)
-                # Average change in this range is -17.1879
-                return last_value - 17.19
-            elif last_value >= 100:
-                # Values in this range tend to decrease dramatically
-                # Average change is -126.423
-                return last_value - 126.42
-            elif 0 <= last_value < 50:
-                # Use median of last values for this range
-                if len(hist) >= 10:
-                    return np.median(hist[-10:])
-                else:
-                    # When not enough history, predict slight increase
-                    return last_value + 10.74
-            else:
-                # Fallback
-                return last_value
-        elif self.table_index == 3:
-            # Table 3 has extremely high autocorrelation (0.9997)
-            # Use a very simple model that takes advantage of this property
-            if len(hist) < 3:
-                return hist[-1]  # Not enough history
-                
-            # Table 3 analysis showed that the best model was "Mean of Last 3" with MSE = 48.26
-            return np.mean(hist[-3:])
-            
-        # Check for alternating pattern
-        if (self.table_index == 4 or self.player_alternating) and len(hist) > 1:
-            diffs = np.diff(hist)
-            last_diff = diffs[-1]
-            # If pattern shows strong alternating behavior
-            if np.std(diffs) < 1.0 and abs(last_diff) > 0.1:
-                return hist[-1] - last_diff
+        if len(hist) < 5:
+            # If not enough history, use mean of available values
+            return np.mean(hist) if hist else 0
         
-        if self.player_model == "alternating":
-            # Handle alternating pattern
-            diffs = np.diff(hist)
-            if len(diffs) > 0:
-                return hist[-1] - diffs[-1]
+        # Special case for alternating patterns
+        if self.player_alternating and len(hist) >= 2:
+            last_diff = hist[-1] - hist[-2]
+            return hist[-1] - last_diff
+        
+        # Convert history to features
+        X = np.array(hist[-5:]).reshape(1, -1)
+        
+        # Table-specific predictions
+        if self.table_index == 0:
+            prediction = self.player_model.predict(X)[0]
+        elif self.table_index == 1:
+            if len(hist) >= 2:
+                # Try to use card transition data if available
+                last_card = None
+                curr_card = None
+                
+                # Convert recent spy values to likely cards
+                for i in range(len(hist) - 1, max(len(hist) - 3, -1), -1):
+                    rounded_spy = round(hist[i])
+                    if rounded_spy in self.player_spy_to_card:
+                        if curr_card is None:
+                            curr_card = self.player_spy_to_card[rounded_spy]
+                        elif last_card is None:
+                            last_card = self.player_spy_to_card[rounded_spy]
+                            break
+                
+                # If we found a matching transition, use its mean
+                if last_card is not None and curr_card is not None:
+                    key = f"{last_card}->{curr_card}"
+                    if key in self.transition_means:
+                        return self.transition_means[key]
+            
+            # Fall back to model prediction
+            prediction = self.player_model.predict(X)[0]
+        elif self.table_index == 2:
+            # Improved prediction for Table 2 using a weighted ensemble approach
+            # First get the model prediction
+            model_prediction = self.player_model.predict(X)[0]
+            
+            # Calculate exponential moving average
+            alpha = 0.3
+            ema = 0
+            for i in range(len(hist)):
+                ema = alpha * hist[i] + (1 - alpha) * ema
+            
+            # Get simple moving average of last 3 values
+            sma = np.mean(hist[-3:]) if len(hist) >= 3 else np.mean(hist)
+            
+            # Check for high volatility patterns
+            volatility = np.std(hist[-5:]) if len(hist) >= 5 else 1.0
+            
+            # Special case handling for very large values and extreme volatility
+            last_value = hist[-1]
+            if last_value > 200:
+                # Extreme high values tend to drop significantly
+                return last_value * self.high_value_ratio
+            elif last_value < -200:
+                # Extreme negative values tend to rebound
+                return last_value * self.low_value_ratio
+            elif volatility > 150:
+                # Very high volatility: use EMA with stronger weighting
+                prediction = 0.5 * model_prediction + 0.5 * ema
+            elif volatility > 100:
+                # High volatility: use model with EMA stabilization
+                prediction = 0.7 * model_prediction + 0.3 * ema
             else:
-                return hist[-1]
-        else:
-            return self.player_model.predict(hist.reshape(1, -1))[0]
+                # Lower volatility: blend model with moving average
+                prediction = 0.8 * model_prediction + 0.2 * sma
+        elif self.table_index == 3:
+            # Table 3 uses card transition effects
+            prediction = self.player_model.predict(X)[0]
+            
+            # Apply card transition effects if we can identify them
+            if len(hist) >= 2:
+                last_rounded = round(hist[-1] / 10) * 10
+                prev_rounded = round(hist[-2] / 10) * 10
+                
+                if last_rounded in self.player_spy_to_card and prev_rounded in self.player_spy_to_card:
+                    last_card = self.player_spy_to_card[last_rounded]
+                    prev_card = self.player_spy_to_card[prev_rounded]
+                    
+                    key = f"{prev_card}->{last_card}"
+                    if key in self.card_transitions and len(self.card_transitions[key]) >= 5:
+                        transition_effect = np.mean(self.card_transitions[key])
+                        prediction = hist[-1] + transition_effect
+        else:  # Table 4
+            prediction = self.player_model.predict(X)[0]
+        
+        return prediction
     
     def get_dealer_spy_prediction(self, hist):
         """

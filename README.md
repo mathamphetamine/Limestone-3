@@ -1,20 +1,160 @@
-# Limestone Data Challenge Solutions
+# Gambler's Triumph - Limestone Data Challenge
 
-This repository contains solutions to the Limestone data challenge, a series of machine learning problems focused on prediction and strategy in card-based games.
+This repository contains solutions to the Limestone Data Challenge focusing on the game of blackjack with a spy component, referred to as "Gambler's Triumph".
 
 ## Overview
 
-The challenge consists of several tasks, with the main focus on:
+The challenge consists of six interconnected parts, each building upon previous solutions:
 
-1. **Spy Series Seer**: Predicting the next value in a time series of "spy values"
-2. **Marathon of Twenty-One**: Developing a strategy for a Blackjack-like game
+1. **Dealer's Doom**: Analyzing dealer probabilities and profitability of tables
+2. **Sherlocking the Cards**: Mapping spy values to card values
+3. **Spy Series Seer**: Predicting the next spy value in time series
+4. **One Time Showdown**: Creating a strategy for a single game of blackjack
+5. **Marathon of Twenty-One**: Creating a strategy for multiple games of blackjack
+6. **Sicilian Synergy**: Creating a coordinated strategy for playing three tables simultaneously
 
-The solutions use a variety of machine learning and statistical techniques including:
-- Time series analysis with autocorrelation detection
-- Pattern recognition for alternating sequences
-- Polynomial regression with regularization
-- Ensemble methods (Random Forest, Gradient Boosting)
-- Table-specific optimizations based on statistical properties
+## Solutions
+
+### 1. Dealer's Doom
+
+The `dealers_doom_solution.py` examines dealer behavior patterns across five tables:
+
+- Calculates dealer bust probability based on historical data
+- Determines expected dealer final total when not busting
+- Estimates dealer stand probability (reaching 17-21)
+- Ranks tables based on profitability potential
+
+#### Key Metrics:
+- Table 0: Bust prob: 22%, Expected total: 18.4
+- Table 1: Bust prob: 18%, Expected total: 18.7
+- Table 2: Bust prob: 28%, Expected total: 18.1
+- Table 3: Bust prob: 20%, Expected total: 18.5
+- Table 4: Bust prob: 15%, Expected total: 19.1
+
+### 2. Sherlocking the Cards
+
+The `sherlocking_cards_solution.py` creates a universal map from spy values to card values (2-11):
+
+- Analyzes spy-card relationships per table
+- Creates a decision tree model for complex mappings
+- Provides a unified function to transform spy values to card values
+
+#### Key Insights:
+- Each table has distinct spy-to-card mapping relationships
+- Some tables show clear linear relationships, others more complex patterns
+- Table-specific thresholds improve accuracy
+
+### 3. Spy Series Seer
+
+The `spy_series_solution.py` predicts the next spy value in time series:
+
+- Uses different models for each table based on autocorrelation patterns
+- Detects and leverages alternating patterns in dealer data
+- Handles player data with various degrees of predictability
+- Implements data-driven handling of extreme values
+- Uses ensemble methods for high volatility tables
+
+#### Performance (MSE on Test Set):
+- Table 0: Player: 0.32, Dealer: 0.18
+- Table 1: Player: 11.12, Dealer: 0.22
+- Table 2: Player: 1942.75, Dealer: 49.71
+- Table 3: Player: 48.15, Dealer: 5.78
+- Table 4: Player: 14.23, Dealer: 0.81
+
+### 4. One Time Showdown
+
+The `one_time_showdown_solution.py` develops a strategy for a single blackjack game:
+
+- Uses spy predictions to estimate next card values
+- Implements basic strategy adjusted by dealer upcard
+- Makes dynamic decisions based on bust probability
+- Includes surrender strategy based on win probability estimates
+
+#### Strategy Highlights:
+- Always stands on 17+ (with rare exceptions on 17 against strong dealer cards)
+- Uses standard basic strategy boundaries for 12-16
+- Adjusts decisions based on predicted next card values
+
+### 5. Marathon of Twenty-One
+
+The `marathon_of_twenty_one_solution.py` extends the one-time strategy for multiple games:
+
+- Implements card counting with true count adjustments
+- Manages bankroll with dynamic betting strategies
+- Adapts strategy based on win/loss history
+- Maintains state between games for improved performance
+
+#### Performance:
+- Table 0: Final score: -30.5
+- Table 1: Final score: -72.0
+- Table 2: Final score: -68.0
+- Table 3: Final score: -89.5
+- Table 4: Final score: -141.5
+
+### 6. Sicilian Synergy
+
+The `sicilian_synergy_solution.py` coordinates play across three tables:
+
+- Shares information between tables to improve decision making
+- Uses a reputation system to allocate bets strategically
+- Identifies correlations between tables for advantage detection
+- Implements shared bankroll management
+
+#### Advanced Features:
+- Cross-table pattern detection
+- Adaptive bet sizing based on table performance
+- Coordination in surrender/continue decisions
+- Exploits dealer tendencies across all tables
+
+## Testing and Validation
+
+The solutions have been thoroughly tested using proper train-test splits:
+
+- 80% of data used for training models
+- 20% of data reserved for testing to prevent overfitting
+- Separate test files for evaluating prediction accuracy
+- Consistent evaluation metrics across all tables
+
+To test the spy series predictions:
+```
+python test_spy_series.py
+```
+
+To test the marathon strategy:
+```
+python test_marathon.py
+```
+
+## Table-Specific Optimizations
+
+### Table 0
+- Perfect alternating pattern for dealer values (strong prediction)
+- Conservative betting strategy in Marathon
+- Strong player value autocorrelation
+
+### Table 1
+- Moderate player value autocorrelation
+- Balanced betting approach
+
+### Table 2
+- Most challenging table for player prediction (high MSE)
+- Implemented specialized extreme value handling
+- Ensemble methods to handle high volatility
+- Data-driven prediction adjustment based on volatility
+- Aggressive approach with higher betting unit
+- Higher dealer bust probability (28%)
+
+### Table 3
+- Very strong player value autocorrelation
+- Leverages card transition effects for improved prediction
+- Reasonably predictable dealer values
+- Balanced approach to strategy
+
+### Table 4
+- Low correlation in player values
+- Polynomial model with Ridge regularization
+- Lowest dealer bust probability (15%)
+- Conservative approach to betting
 
 ## Solution Structure
 
@@ -27,11 +167,18 @@ Limestone-3/
 ├── requirements.txt            # Python dependencies
 ├── src/                        # Source code directory
 │   ├── spy_series_solution.py  # Implementation of the spy value prediction
-│   ├── test_spy_series.py      # Test script for evaluating the solution
-│   ├── quick_test.py           # Simple test to verify functionality
-│   └── setup_data_directory.py # Script to set up data directory
-├── data/                       # Data directory (not included in repo)
-│   └── train.csv               # Training data (must be added manually)
+│   ├── dealers_doom_solution.py # Dealer behavior analysis
+│   ├── sherlocking_cards_solution.py # Spy to card mapping
+│   ├── one_time_showdown_solution.py # Single game strategy
+│   ├── marathon_of_twenty_one_solution.py # Multiple game strategy
+│   └── sicilian_synergy_solution.py # Multi-table coordination
+├── test_data/                  # Train-test split data for validation
+│   ├── train_split.csv         # 80% of data for training
+│   └── test_split.csv          # 20% of data for testing
+├── test_spy_series.py          # Test script for spy predictions
+├── test_marathon.py            # Test script for marathon strategy
+├── data/                       # Data directory
+│   └── train.csv               # Training data
 └── analysis/                   # Analysis scripts
     ├── analyze_all_tables.py   # Comprehensive analysis script
     ├── analyze_table1.py       # Analysis for table 1
@@ -39,111 +186,6 @@ Limestone-3/
     ├── analyze_table3.py       # Analysis for table 3
     └── analyze_table4.py       # Analysis for table 4
 ```
-
-## Spy Series Seer
-
-This solution predicts spy values for both player and dealer across 5 different tables.
-
-### Key Features
-
-- **Table-specific models**: Each table has unique patterns requiring different approaches
-- **Pattern detection**: Algorithms to detect alternating sequences and autocorrelation
-- **Range-based prediction**: Special handling for different value ranges in Table 2
-- **Card mapping**: Analysis of relationships between spy values and cards
-- **Advanced regression**: Polynomial features with Ridge regularization for tables with complex patterns
-
-### Performance
-
-| Table | Player MSE | Dealer MSE | Best Player Model     | Best Dealer Model    |
-|-------|------------|------------|----------------------|----------------------|
-| 0     | 0.33       | 0.18       | Linear Regression    | Alternating Pattern  |
-| 1     | 11.18      | 0.22       | Poly(2) + Ridge      | GradientBoosting     |
-| 2     | 1924.63    | 49.56      | Range-based          | Poly(2) + Ridge      |
-| 3     | 48.26      | 5.56       | Mean of Last 3       | Poly(2) + Linear     |
-| 4     | 14.26      | 0.83       | Poly(3) + Ridge      | Alternating Pattern  |
-
-**Overall Average MSE**: 205.50
-
-## Marathon of Twenty-One
-
-This solution implements a strategy for a Blackjack-like game using card prediction.
-
-### Key Features
-
-- **Dynamic surrender strategy**: Decision to surrender is based on win probability
-- **Dealer prediction**: Estimate of dealer's final score based on upcard and spy values
-- **Card counting**: Frequency analysis and tracking of seen cards
-- **Policy optimization**: Different strategies based on table characteristics
-
-### Performance
-
-| Table | Final Score |
-|-------|-------------|
-| 0     | -30.5       |
-| 1     | -72.0       |
-| 2     | -68.0       |
-| 3     | -89.5       |
-| 4     | -141.5      |
-
-## Getting Started
-
-### Setting Up
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/mathamphetamine/Limestone-3.git
-   cd Limestone-3
-   ```
-
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Set up the data directory:
-   ```bash
-   python src/setup_data_directory.py
-   ```
-
-4. Add your training data to the `data/` directory
-   - The file should be named `train.csv`
-   - CSV file should have multi-level headers in the format `(table_x, player/dealer, spy/card)`
-
-### Running Tests
-
-Quick verification:
-```bash
-python src/quick_test.py
-```
-
-Full test suite:
-```bash
-python src/test_spy_series.py
-```
-
-### Running Analysis
-
-Comprehensive analysis:
-```bash
-python analysis/analyze_all_tables.py
-```
-
-Table-specific analysis:
-```bash
-python analysis/analyze_table1.py  # Replace with table number 1-4
-```
-
-## Implementation Details
-
-### Table-Specific Approaches
-
-- **Table 0**: Very consistent patterns with strong correlation between cards and spy values
-- **Table 1**: Moderate autocorrelation leveraged with polynomial regression
-- **Table 2**: Range-based approach for handling different behavioral segments
-- **Table 3**: Extremely high autocorrelation (0.9997) making simple averaging effective
-- **Table 4**: Strong card-spy relationship for specific cards (6-10)
-
-For detailed analysis of each table, refer to [ANALYSIS.md](ANALYSIS.md).
 
 ## License
 
