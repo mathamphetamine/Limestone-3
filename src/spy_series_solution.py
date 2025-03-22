@@ -4,8 +4,69 @@ import os
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.preprocessing import PolynomialFeatures
-from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.model_selection import train_test_split
+from sklearn.base import BaseEstimator, TransformerMixin
+
+class TemporalFeaturesTransformer(BaseEstimator, TransformerMixin):
+    """
+    Creates advanced temporal features from time series data to improve predictions.
+    
+    This transformer extracts statistical and pattern-based features from the input
+    window, which helps models better understand temporal dynamics, especially
+    in high volatility data like Table 2.
+    """
+    def __init__(self, window_size=5):
+        self.window_size = window_size
+    
+    def fit(self, X, y=None):
+        return self
+    
+    def transform(self, X):
+        # X shape: (n_samples, window_size)
+        transformed = []
+        
+        for row in X:
+            # Basic statistics
+            rolling_mean = np.mean(row)
+            rolling_std = np.std(row)
+            rolling_min = np.min(row)
+            rolling_max = np.max(row)
+            
+            # Trend features
+            first = row[0]
+            last = row[-1]
+            trend = last - first
+            
+            # Volatility features
+            diffs = np.diff(row)
+            diff_mean = np.mean(np.abs(diffs))
+            sign_changes = np.sum(diffs[:-1] * diffs[1:] < 0)
+            
+            # Acceleration features (second derivative)
+            if len(diffs) > 1:
+                accel = np.diff(diffs)
+                accel_mean = np.mean(np.abs(accel))
+            else:
+                accel_mean = 0
+                
+            # Combine all features
+            features = [
+                rolling_mean, 
+                rolling_std,
+                rolling_min,
+                rolling_max,
+                first,
+                last,
+                trend,
+                diff_mean,
+                sign_changes,
+                accel_mean
+            ]
+            
+            transformed.append(features)
+            
+        return np.array(transformed)
 
 class MyPlayer:
     """
@@ -231,10 +292,19 @@ class MyPlayer:
             self.dealer_model = GradientBoostingRegressor(n_estimators=100, max_depth=3)
         elif self.table_index == 2:
             # Table 2: Complex data with high variance
-            # Improved model for high MSE in Table 2
-            self.player_model = GradientBoostingRegressor(n_estimators=200, learning_rate=0.05, 
-                                                        max_depth=4, random_state=42,
-                                                        subsample=0.8, min_samples_split=5)
+            # Improved model with advanced temporal features for high MSE in Table 2
+            self.player_model = Pipeline([
+                ("features", TemporalFeaturesTransformer(window_size=5)),
+                ("gbr", GradientBoostingRegressor(
+                    n_estimators=300,
+                    learning_rate=0.04,
+                    max_depth=5,
+                    subsample=0.75,
+                    min_samples_split=10,
+                    max_features='sqrt',
+                    random_state=42
+                ))
+            ])
             
             # For Table 2, analyze the extreme value patterns
             if len(self.player_spy) > 10:
@@ -401,12 +471,21 @@ class MyPlayer:
             # Fall back to model prediction
             prediction = self.player_model.predict(X)[0]
         elif self.table_index == 2:
-            # Improved prediction for Table 2 using a weighted ensemble approach
-            # First get the model prediction
+            # Special case handling for very large values and extreme volatility
+            last_value = hist[-1]
+            
+            # For extreme high values (tend to drop significantly)
+            if last_value > 200:
+                return last_value * self.high_value_ratio
+            # For extreme negative values (tend to rebound)
+            elif last_value < -200:
+                return last_value * self.low_value_ratio
+            
+            # Get model prediction using our optimized temporal features pipeline
             model_prediction = self.player_model.predict(X)[0]
             
-            # Calculate exponential moving average
-            alpha = 0.3
+            # Calculate exponential moving average with adaptive alpha
+            alpha = min(0.4, 0.2 + 0.2 * (abs(last_value) / 100)) # Adaptive alpha based on value
             ema = 0
             for i in range(len(hist)):
                 ema = alpha * hist[i] + (1 - alpha) * ema
@@ -414,17 +493,21 @@ class MyPlayer:
             # Get simple moving average of last 3 values
             sma = np.mean(hist[-3:]) if len(hist) >= 3 else np.mean(hist)
             
-            # Check for high volatility patterns
+            # Check for trend reversal patterns in recent history
+            if len(hist) >= 4:
+                recent_diffs = np.diff(hist[-4:])
+                sign_changes = np.sum(recent_diffs[:-1] * recent_diffs[1:] < 0)
+                trend_reversal_likely = sign_changes >= 2
+            else:
+                trend_reversal_likely = False
+            
+            # Calculate volatility
             volatility = np.std(hist[-5:]) if len(hist) >= 5 else 1.0
             
-            # Special case handling for very large values and extreme volatility
-            last_value = hist[-1]
-            if last_value > 200:
-                # Extreme high values tend to drop significantly
-                return last_value * self.high_value_ratio
-            elif last_value < -200:
-                # Extreme negative values tend to rebound
-                return last_value * self.low_value_ratio
+            # Ensemble prediction based on volatility and trend reversal
+            if trend_reversal_likely:
+                # When trend reversal detected, give more weight to recent data
+                prediction = 0.4 * model_prediction + 0.6 * sma
             elif volatility > 150:
                 # Very high volatility: use EMA with stronger weighting
                 prediction = 0.5 * model_prediction + 0.5 * ema
@@ -434,6 +517,7 @@ class MyPlayer:
             else:
                 # Lower volatility: blend model with moving average
                 prediction = 0.8 * model_prediction + 0.2 * sma
+                
         elif self.table_index == 3:
             # Table 3 uses card transition effects
             prediction = self.player_model.predict(X)[0]
